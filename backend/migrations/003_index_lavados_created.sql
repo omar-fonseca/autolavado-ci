@@ -1,0 +1,1 @@
+CREATE INDEX idx_lavados_creado_id ON lavados (creado_en, id)

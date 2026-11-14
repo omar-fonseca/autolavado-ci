@@ -6,7 +6,15 @@ const expected = {
 };
 
 try {
-  const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(10000) });
+  const headers = {};
+  if (process.env.API_WRITE_KEY) {
+    headers['x-api-key'] = process.env.API_WRITE_KEY;
+  }
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(10000)
+  });
   const result = await response.json();
   const passed = response.status === 200
     && result.estado === expected.estado

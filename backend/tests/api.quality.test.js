@@ -1,20 +1,30 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import net from 'node:net';
-import test, { after, before } from 'node:test';
+import test, { after, before, describe } from 'node:test';
 import { promisify } from 'node:util';
-import mysql from 'mysql2/promise';
-import { initDB } from '../src/db.js';
+import pool, { createPool, runMigrations } from '../src/db.js';
 import { startServer } from '../src/server.js';
 
 class MemoryLavadosDatabase {
   rows = [];
   nextId = 1;
+  failHealth = false;
+  failDashboard = false;
 
   async query(sql) {
     const statement = sql.trim().toLowerCase();
     if (statement === 'select 1') {
+      if (this.failHealth) {
+        throw new Error('simulated database outage');
+      }
       return [[{ 1: 1 }], []];
+    }
+    if (this.failDashboard && statement.includes('count(*)') && statement.includes('from lavados')) {
+      throw new Error('simulated dashboard database failure');
+    }
+    if (statement === 'select count(*) as total from lavados') {
+      return [[{ total: this.rows.length }], []];
     }
     if (statement.includes('count(*)') && statement.includes('from lavados')) {
       const metrics = {
@@ -65,6 +75,14 @@ class MemoryLavadosDatabase {
     if (statement.startsWith('select * from lavados where id = ?')) {
       const row = this.rows.find((item) => item.id === Number(parameters[0]));
       return [row ? [{ ...row }] : [], []];
+    }
+
+    if (statement.startsWith('select * from lavados order by')) {
+      const [limit, offset] = parameters.map(Number);
+      const rows = [...this.rows]
+        .sort((a, b) => b.creado_en - a.creado_en || b.id - a.id)
+        .slice(offset, offset + limit);
+      return [rows, []];
     }
 
     if (statement.startsWith('update lavados')) {
@@ -128,7 +146,11 @@ function probeMySQL() {
 }
 
 async function request(path, options) {
-  const response = await fetch(`${baseUrl}${path}`, options);
+  const headers = { ...options?.headers, connection: 'close' };
+  if (process.env.API_WRITE_KEY) {
+    headers['x-api-key'] = process.env.API_WRITE_KEY;
+  }
+  const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
   const body = await response.json();
   return { response, body };
 }
@@ -137,6 +159,7 @@ const createdIds = [];
 const execFileAsync = promisify(execFile);
 let database;
 let mysqlTestPool;
+let migrationPool;
 let server;
 let baseUrl;
 let initialDashboard;
@@ -144,20 +167,30 @@ let realMySQL = false;
 let motoId;
 let carroId;
 
+function qualityTest(name, callback) {
+  test(name, { concurrency: false }, callback);
+}
+
+describe('AutoLavado CI API quality', { concurrency: false }, () => {
 before(async () => {
   realMySQL = await probeMySQL();
   if (realMySQL) {
-    mysqlTestPool = mysql.createPool({
+    migrationPool = createPool({
+      host: '127.0.0.1',
+      port: 3306,
+      user: process.env.MIGRATION_DB_USER || process.env.DB_USER || 'root',
+      password: process.env.MIGRATION_DB_PASSWORD || process.env.DB_PASSWORD || 'rootpassword',
+      database: process.env.DB_NAME || 'autolavado_db',
+    });
+    await runMigrations({ database: migrationPool });
+    mysqlTestPool = createPool({
       host: '127.0.0.1',
       port: 3306,
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || 'rootpassword',
-      database: process.env.DB_NAME || 'autolavado_db',
-      waitForConnections: true,
-      connectionLimit: 4
+      database: process.env.DB_NAME || 'autolavado_db'
     });
     database = mysqlTestPool;
-    await initDB(10, database);
     console.log('[ISO/IEC 29119] Motor: MySQL real en localhost:3306');
   } else {
     database = new MemoryLavadosDatabase();
@@ -178,23 +211,27 @@ after(async () => {
     await Promise.all(createdIds.map((id) => database.execute('DELETE FROM lavados WHERE id = ?', [id])));
   }
   if (server) {
-    await new Promise((resolve, reject) => {
+    const closed = new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
     });
+    server.closeAllConnections();
+    await closed;
   }
   if (realMySQL) {
     await mysqlTestPool.end();
+    await migrationPool.end();
   }
+  await pool.end();
 });
 
-test('CP-01 (Salud): API y base de datos responden conectadas', async () => {
+qualityTest('CP-01 (Salud): API y base de datos responden conectadas', async () => {
   console.log('[ISO/IEC 29119] CP-01: GET /api/health -> 200 y db connected');
   const { response, body } = await request('/api/health');
   assert.equal(response.status, 200);
   assert.deepEqual(body, { ok: true, db: 'connected' });
 });
 
-test('CP-02 (Reglas): rechaza placa ausente, tipo invalido y precio negativo', async () => {
+qualityTest('CP-02 (Reglas): rechaza placa ausente, tipo invalido y precio negativo', async () => {
   console.log('[ISO/IEC 29119] CP-02: datos invalidos -> 400 Bad Request');
   const valid = {
     cliente: 'Prueba QA',
@@ -207,7 +244,12 @@ test('CP-02 (Reglas): rechaza placa ausente, tipo invalido y precio negativo', a
   const invalidRecords = [
     { ...valid, placa: '' },
     { ...valid, tipo_vehiculo: 'AVION' },
-    { ...valid, precio: -1 }
+    { ...valid, precio: -1 },
+    { ...valid, precio: true },
+    { ...valid, precio: '12000' },
+    { ...valid, precio: 2147483648 },
+    { ...valid, estado: '' },
+    { ...valid, unknown: 'no permitido' }
   ];
 
   for (const record of invalidRecords) {
@@ -221,7 +263,7 @@ test('CP-02 (Reglas): rechaza placa ausente, tipo invalido y precio negativo', a
   }
 });
 
-test('CP-03 (Creacion): crea MOTO y CARRO y normaliza placas', async () => {
+qualityTest('CP-03 (Creacion): crea MOTO y CARRO y normaliza placas', async () => {
   console.log('[ISO/IEC 29119] CP-03: POST /api/lavados -> 201 y placa en mayusculas');
   const records = [
     {
@@ -252,16 +294,18 @@ test('CP-03 (Creacion): crea MOTO y CARRO y normaliza placas', async () => {
   }
 });
 
-test('CP-04 (Lectura): lista los registros recien creados', async () => {
+qualityTest('CP-04 (Lectura): lista los registros recien creados', async () => {
   console.log('[ISO/IEC 29119] CP-04: GET /api/lavados -> contiene los nuevos registros');
-  const { response, body } = await request('/api/lavados');
+  const { response, body } = await request('/api/lavados?page=1&limit=100');
   assert.equal(response.status, 200);
   assert.ok(Array.isArray(body));
+  assert.equal(response.headers.get('x-page'), '1');
+  assert.equal(response.headers.get('x-page-size'), '100');
   assert.ok(body.some((row) => row.id === motoId));
   assert.ok(body.some((row) => row.id === carroId));
 });
 
-test('CP-05 (Actualizacion): cambia estado y precio', async () => {
+qualityTest('CP-05 (Actualizacion): cambia estado y precio', async () => {
   console.log('[ISO/IEC 29119] CP-05: PUT /api/lavados/:id -> estado y precio actualizados');
   const { response, body } = await request(`/api/lavados/${motoId}`, {
     method: 'PUT',
@@ -273,7 +317,7 @@ test('CP-05 (Actualizacion): cambia estado y precio', async () => {
   assert.equal(Number(body.precio), 15000);
 });
 
-test('CP-06 (Metricas): dashboard calcula conteos e ingresos exactos', async () => {
+qualityTest('CP-06 (Metricas): dashboard calcula conteos e ingresos exactos', async () => {
   console.log('[ISO/IEC 29119] CP-06: GET /api/dashboard -> metricas exactas sobre la linea base');
   const { response, body } = await request('/api/dashboard');
   assert.equal(response.status, 200);
@@ -285,7 +329,7 @@ test('CP-06 (Metricas): dashboard calcula conteos e ingresos exactos', async () 
   assert.equal(body.ingresos_totales, initialDashboard.ingresos_totales + 37000);
 });
 
-test('CP-07 (Eliminacion): elimina una vez y luego responde 404', async () => {
+qualityTest('CP-07 (Eliminacion): elimina una vez y luego responde 404', async () => {
   console.log('[ISO/IEC 29119] CP-07: DELETE /api/lavados/:id -> 200 y repeticion -> 404');
   const first = await request(`/api/lavados/${motoId}`, { method: 'DELETE' });
   assert.equal(first.response.status, 200);
@@ -293,7 +337,7 @@ test('CP-07 (Eliminacion): elimina una vez y luego responde 404', async () => {
   assert.equal(second.response.status, 404);
 });
 
-test('CP-08 (CI/CD): verifica el registro temporal sin cambiar el dashboard', async () => {
+qualityTest('CP-08 (CI/CD): verifica el registro temporal sin cambiar el dashboard', async () => {
   console.log('[ISO/IEC 29119] CP-08: POST /api/verify -> operacion exitosa sin ensuciar metricas');
   const beforeVerify = await request('/api/dashboard');
   const { response, body } = await request('/api/verify', { method: 'POST' });
@@ -311,4 +355,116 @@ test('CP-08 (CI/CD): verifica el registro temporal sin cambiar el dashboard', as
   });
   assert.match(stdout, /Verificacion E2E CI\/CD/);
   assert.match(stdout, /PASS/);
+});
+
+qualityTest('CP-09 (Actualizacion): rechaza IDs, campos y valores invalidos sin mutar datos', async () => {
+  const invalidCases = [
+    ['/api/lavados/1e2', { estado: 'TERMINADO' }, 400],
+    ['/api/lavados/2147483648', { estado: 'TERMINADO' }, 400],
+    [`/api/lavados/${carroId}`, {}, 400],
+    [`/api/lavados/${carroId}`, { estado: '' }, 400],
+    [`/api/lavados/${carroId}`, { precio: '32000' }, 400],
+    [`/api/lavados/${carroId}`, { extra: 'no permitido' }, 400],
+    ['/api/lavados/2147483647', { estado: 'TERMINADO' }, 404]
+  ];
+
+  for (const [path, body, expectedStatus] of invalidCases) {
+    const { response } = await request(path, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    assert.equal(response.status, expectedStatus, `${path} debe responder ${expectedStatus}`);
+  }
+});
+
+qualityTest('CP-10 (Paginacion): limita resultados y valida parametros', async () => {
+  const firstPage = await request('/api/lavados?page=1&limit=1');
+  assert.equal(firstPage.response.status, 200);
+  assert.equal(firstPage.body.length, 1);
+  assert.equal(firstPage.response.headers.get('x-page-size'), '1');
+  assert.ok(Number(firstPage.response.headers.get('x-total-count')) >= 1);
+
+  const invalidPage = await request('/api/lavados?page=0&limit=101');
+  assert.equal(invalidPage.response.status, 400);
+});
+
+qualityTest('CP-11 (Errores HTTP): responde JSON para cuerpo invalido y demasiado grande', async () => {
+  const malformed = await request('/api/lavados', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{invalid'
+  });
+  assert.equal(malformed.response.status, 400);
+  assert.equal(typeof malformed.body.error, 'string');
+
+  const oversized = await request('/api/lavados', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ data: 'x'.repeat(33 * 1024) })
+  });
+  assert.equal(oversized.response.status, 413);
+  assert.equal(typeof oversized.body.error, 'string');
+});
+
+qualityTest('CP-12 (Seguridad): protege escrituras con clave y agrega cabeceras seguras', async () => {
+  const previousKey = process.env.API_WRITE_KEY;
+  const testKey = 'quality-test-key-with-at-least-32-bytes';
+  process.env.API_WRITE_KEY = testKey;
+
+  try {
+    const payload = {
+      cliente: 'QA Secure', placa: 'SECURE-01', tipo_vehiculo: 'MOTO',
+      servicio: 'BASICO', turno: 'TARDE', precio: 12000
+    };
+    const denied = await fetch(`${baseUrl}/api/lavados`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', connection: 'close' },
+      body: JSON.stringify(payload)
+    });
+    assert.equal(denied.status, 401);
+
+    const accepted = await fetch(`${baseUrl}/api/lavados`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': testKey, connection: 'close' },
+      body: JSON.stringify(payload)
+    });
+    assert.equal(accepted.status, 201);
+    assert.ok(accepted.headers.get('x-request-id'));
+    assert.equal(accepted.headers.get('x-content-type-options'), 'nosniff');
+    const created = await accepted.json();
+    createdIds.push(created.id);
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.API_WRITE_KEY;
+    } else {
+      process.env.API_WRITE_KEY = previousKey;
+    }
+  }
+});
+
+qualityTest('CP-13 (Resiliencia): representa fallos de MySQL con estados y requestId', async () => {
+  database.failHealth = true;
+  const health = await request('/api/health');
+  assert.equal(health.response.status, 503);
+  assert.deepEqual(health.body, { ok: false, db: 'disconnected' });
+  database.failHealth = false;
+
+  database.failDashboard = true;
+  const dashboard = await request('/api/dashboard');
+  assert.equal(dashboard.response.status, 500);
+  assert.equal(typeof dashboard.body.error, 'string');
+  assert.ok(dashboard.body.requestId);
+  assert.equal(dashboard.response.headers.get('x-request-id'), dashboard.body.requestId);
+  database.failDashboard = false;
+});
+
+qualityTest('CP-14 (Proteccion): limita escrituras y devuelve 429 al exceder el umbral', async () => {
+  const responses = await Promise.all(Array.from({ length: 65 }, () => request('/api/lavados', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({})
+  })));
+  assert.ok(responses.some(({ response }) => response.status === 429));
+});
 });

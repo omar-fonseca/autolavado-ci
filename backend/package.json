@@ -7,12 +7,15 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test tests/api.quality.test.js",
-    "test:ci": "node tests/verify-ci.js"
+    "test:ci": "node tests/verify-ci.js",
+    "db:migrate": "node src/migrate.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
     "mysql2": "^3.12.0"
   }
 }

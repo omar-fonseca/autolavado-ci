@@ -94,7 +94,7 @@ export async function runMigrations({ database = pool, migrationsDirectory = def
   }
 }
 
-async function waitForDatabase(database, retries) {
+export async function waitForDatabase(database, retries = 10) {
   let lastError;
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {

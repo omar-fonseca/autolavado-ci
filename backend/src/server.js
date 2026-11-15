@@ -7,6 +7,7 @@ import express from 'express';
 import { MemoryStore, rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import pool, { initDB } from './db.js';
+import { runMigrations } from './migrate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultPort = Number(process.env.PORT || 3000);
@@ -394,6 +395,9 @@ export const app = createApp();
 export async function startServer({ port = defaultPort, database = pool, initialize = database === pool } = {}) {
   validateProductionConfig();
   if (initialize) {
+    if (process.env.AUTO_MIGRATE !== 'false') {
+      await runMigrations();
+    }
     await initDB(10, database);
   }
 

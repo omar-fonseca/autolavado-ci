@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f2f5f1">
+    <title>AutoLavado | Operación</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#inicio" aria-label="AutoLavado, inicio">
+          <span class="brand-mark" aria-hidden="true">A<span>.</span></span>
+          <span class="brand-name">AUTO<span>LAVADO</span></span>
+        </a>
+        <div class="topbar-right">
+          <div class="connection" id="connection-status" role="status" aria-live="polite">
+            <span class="connection-dot"></span><span id="connection-label">Conectando</span>
+          </div>
+          <button class="button button-quiet" id="refresh-button" type="button" title="Actualizar datos">
+            <span aria-hidden="true">↻</span><span>Actualizar</span>
+          </button>
+          <span class="date-label" id="today-label"></span>
+        </div>
+      </header>
+
+      <main id="inicio" class="workspace">
+        <section class="page-heading" aria-labelledby="page-title">
+          <div>
+            <p class="eyebrow">CENTRO DE CONTROL <span class="eyebrow-line"></span> OPERACIÓN</p>
+            <h1 id="page-title">Buenos días<span class="title-period">.</span></h1>
+            <p class="page-subtitle">Actividad y servicios de tu lavadero, en un solo lugar.</p>
+          </div>
+          <button class="button button-primary" id="new-wash-button" type="button">
+            <span class="plus-icon" aria-hidden="true">+</span> Nuevo lavado
+          </button>
+        </section>
+
+        <section class="metrics-section" aria-labelledby="metrics-title">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">01</span>
+              <h2 id="metrics-title">Resumen operativo</h2>
+            </div>
+            <span class="live-label"><span class="live-pulse"></span> EN VIVO</span>
+          </div>
+          <div class="metrics-grid" id="metrics-grid" aria-live="polite">
+            <article class="metric-card metric-ink">
+              <div class="metric-top"><span>INGRESOS TOTALES</span><span class="metric-mark" aria-hidden="true">$</span></div>
+              <strong class="metric-value" data-metric="ingresos_totales">—</strong>
+              <span class="metric-foot">COP · acumulado histórico</span>
+            </article>
+            <article class="metric-card metric-lime">
+              <div class="metric-top"><span>MOTOS</span><span class="metric-mark" aria-hidden="true">01</span></div>
+              <strong class="metric-value" data-metric="total_motos">—</strong>
+              <span class="metric-foot">Lavados registrados</span>
+            </article>
+            <article class="metric-card metric-white">
+              <div class="metric-top"><span>CARROS</span><span class="metric-mark" aria-hidden="true">02</span></div>
+              <strong class="metric-value" data-metric="total_carros">—</strong>
+              <span class="metric-foot">Lavados registrados</span>
+            </article>
+            <article class="metric-card metric-white">
+              <div class="metric-top"><span>CAMIONETAS</span><span class="metric-mark" aria-hidden="true">03</span></div>
+              <strong class="metric-value" data-metric="total_camionetas">—</strong>
+              <span class="metric-foot">Lavados registrados</span>
+            </article>
+          </div>
+
+          <div class="operations-strip" id="operations-strip" aria-live="polite">
+            <div class="operation-item">
+              <span class="operation-label">TURNO MAÑANA</span>
+              <strong data-metric="turno_manana">—</strong>
+              <span>servicios</span>
+            </div>
+            <div class="operation-divider" aria-hidden="true"></div>
+            <div class="operation-item">
+              <span class="operation-label">TURNO TARDE</span>
+              <strong data-metric="turno_tarde">—</strong>
+              <span>servicios</span>
+            </div>
+            <div class="operation-divider" aria-hidden="true"></div>
+            <div class="operation-item">
+              <span class="operation-label">EN PROCESO</span>
+              <strong data-metric="en_proceso">—</strong>
+              <span>vehículos</span>
+            </div>
+            <div class="operation-divider" aria-hidden="true"></div>
+            <div class="operation-item">
+              <span class="operation-label">TERMINADOS</span>
+              <strong data-metric="terminados">—</strong>
+              <span>vehículos</span>
+            </div>
+            <div class="operation-total">
+              <span class="operation-label">TOTAL LAVADOS</span>
+              <strong data-metric="total_lavados">—</strong>
+            </div>
+          </div>
+          <p class="inline-error" id="dashboard-error" role="alert" hidden></p>
+        </section>
+
+        <section class="list-section" aria-labelledby="list-title">
+          <div class="section-heading list-heading">
+            <div>
+              <span class="section-index">02</span>
+              <h2 id="list-title">Lavados recientes</h2>
+              <span class="record-count" id="record-count">Cargando...</span>
+            </div>
+            <div class="list-tools">
+              <label class="search-box" for="search-input">
+                <span aria-hidden="true">⌕</span>
+                <input id="search-input" type="search" placeholder="Buscar cliente o placa" autocomplete="off">
+              </label>
+            </div>
+          </div>
+          <div class="table-frame">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">CLIENTE / PLACA</th>
+                    <th scope="col">VEHÍCULO</th>
+                    <th scope="col">SERVICIO</th>
+                    <th scope="col">TURNO</th>
+                    <th scope="col">ESTADO</th>
+                    <th scope="col">PRECIO</th>
+                    <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody id="wash-rows">
+                  <tr><td class="table-message" colspan="7"><span class="loader"></span> Cargando lavados...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <span id="page-summary">Página 1</span>
+              <div class="pagination">
+                <button class="button button-pagination" id="previous-page" type="button" aria-label="Página anterior" disabled>←</button>
+                <span id="page-indicator">1 / 1</span>
+                <button class="button button-pagination" id="next-page" type="button" aria-label="Página siguiente" disabled>→</button>
+              </div>
+            </div>
+          </div>
+          <p class="inline-error" id="list-error" role="alert" hidden></p>
+        </section>
+
+        <section class="verify-section" aria-labelledby="verify-title">
+          <div class="verify-symbol" aria-hidden="true">✓</div>
+          <div class="verify-copy">
+            <p class="eyebrow">CONTROL DE CALIDAD</p>
+            <h2 id="verify-title">Verificación CI/CD</h2>
+            <p>Validación transaccional de la API y la base de datos.</p>
+            <div class="verify-expectation">ESPERADO <code>OPERACION_EXITOSA</code><span>·</span><code>TEST-999</code><span>·</span><code>$ 32.000</code></div>
+          </div>
+          <button class="button button-verify" id="verify-button" type="button">Ejecutar Verificación CI/CD <span aria-hidden="true">↗</span></button>
+          <div class="verify-result" id="verify-result" role="status" aria-live="polite" hidden></div>
+        </section>
+
+        <footer class="page-footer">
+          <span>AUTOLAVADO <span class="footer-dot">●</span> CONTROL OPERATIVO</span>
+          <span>API <code>localhost:3000</code></span>
+        </footer>
+      </main>
+    </div>
+
+    <dialog class="wash-dialog" id="wash-dialog" aria-labelledby="form-title">
+      <form id="wash-form" novalidate>
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">REGISTRO OPERATIVO</p>
+            <h2 id="form-title">Nuevo lavado</h2>
+          </div>
+          <button class="dialog-close" id="close-dialog" type="button" aria-label="Cerrar formulario">×</button>
+        </div>
+        <input id="wash-id" type="hidden">
+        <div class="form-grid">
+          <label class="field field-wide" for="cliente">Nombre del cliente <span>*</span>
+            <input id="cliente" name="cliente" type="text" maxlength="80" autocomplete="name" required placeholder="Ej. Laura Martínez">
+          </label>
+          <label class="field field-wide" for="placa">Placa <span>*</span>
+            <input id="placa" name="placa" type="text" maxlength="15" required placeholder="ABC-123" autocapitalize="characters">
+          </label>
+          <label class="field" for="tipo-vehiculo">Tipo de vehículo <span>*</span>
+            <select id="tipo-vehiculo" name="tipo_vehiculo" required>
+              <option value="MOTO">Moto</option>
+              <option value="CARRO">Carro</option>
+              <option value="CAMIONETA">Camioneta</option>
+            </select>
+          </label>
+          <label class="field" for="servicio">Servicio <span>*</span>
+            <select id="servicio" name="servicio" required>
+              <option value="BASICO">Básico</option>
+              <option value="GENERAL">General</option>
+              <option value="PREMIUM">Premium</option>
+            </select>
+          </label>
+          <label class="field" for="turno">Turno <span>*</span>
+            <select id="turno" name="turno" required>
+              <option value="MANANA">Mañana</option>
+              <option value="TARDE">Tarde</option>
+            </select>
+          </label>
+          <label class="field" for="estado">Estado <span>*</span>
+            <select id="estado" name="estado" required>
+              <option value="EN_PROCESO">En proceso</option>
+              <option value="TERMINADO">Terminado</option>
+            </select>
+          </label>
+          <label class="field field-wide price-field" for="precio">Precio en COP <span>*</span>
+            <div class="price-input-wrap"><span>$</span><input id="precio" name="precio" type="number" min="1" max="2147483647" step="1" inputmode="numeric" required></div>
+            <small>Tarifa sugerida editable</small>
+          </label>
+        </div>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" id="cancel-dialog" type="button">Cancelar</button>
+          <button class="button button-primary" id="save-wash" type="submit">Guardar lavado</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

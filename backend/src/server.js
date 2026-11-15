@@ -1,12 +1,14 @@
 import 'dotenv/config';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import { MemoryStore, rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
-import pool, { initDB } from './db.js';
+import pool, { createPool, initDB } from './db.js';
+import { MemoryLavadosDatabase } from './memory-db.js';
 import { runMigrations } from './migrate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +26,45 @@ const prices = {
   CARRO: { BASICO: 22000, GENERAL: 32000, PREMIUM: 45000 },
   CAMIONETA: { BASICO: 28000, GENERAL: 40000, PREMIUM: 55000 }
 };
+
+function isMySQLReachable(host, port) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    const finish = (reachable) => {
+      socket.destroy();
+      resolve(reachable);
+    };
+    socket.setTimeout(800);
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+    socket.once('timeout', () => finish(false));
+  });
+}
+
+async function selectLocalDatabase(database) {
+  const configuredHost = process.env.DB_HOST || '127.0.0.1';
+  const port = Number(process.env.DB_PORT || 3306);
+  if (await isMySQLReachable(configuredHost, port)) {
+    return { database, migrationHost: undefined, ownsDatabase: false };
+  }
+
+  if (configuredHost !== '127.0.0.1' && configuredHost !== 'localhost'
+    && await isMySQLReachable('127.0.0.1', port)) {
+    return {
+      database: createPool({ host: '127.0.0.1' }),
+      migrationHost: '127.0.0.1',
+      ownsDatabase: true
+    };
+  }
+
+  const url = defaultPort === 3000 ? 'http://localhost:3000' : `http://localhost:${defaultPort}`;
+  console.warn(`Modo desarrollo sin MySQL local: usando base de datos en memoria en ${url}`);
+  return {
+    database: new MemoryLavadosDatabase(),
+    migrationHost: undefined,
+    ownsDatabase: false
+  };
+}
 
 function parseId(value) {
   if (!/^[1-9]\d*$/.test(value)) {
@@ -394,28 +435,41 @@ export const app = createApp();
 
 export async function startServer({ port = defaultPort, database = pool, initialize = database === pool } = {}) {
   validateProductionConfig();
-  if (initialize) {
-    if (process.env.AUTO_MIGRATE !== 'false') {
-      await runMigrations();
-    }
-    await initDB(10, database);
+  let selectedDatabase = database;
+  let migrationHost;
+  let ownsDatabase = false;
+  const useMemoryDatabase = initialize
+    && database === pool
+    && process.env.NODE_ENV !== 'production';
+
+  if (useMemoryDatabase) {
+    ({ database: selectedDatabase, migrationHost, ownsDatabase } = await selectLocalDatabase(database));
   }
 
-  const serverApp = database === pool ? app : createApp(database);
+  if (initialize && !(selectedDatabase instanceof MemoryLavadosDatabase)) {
+    if (process.env.AUTO_MIGRATE !== 'false') {
+      await runMigrations(migrationHost ? { host: migrationHost } : undefined);
+    }
+    await initDB(10, selectedDatabase);
+  }
+
+  const serverApp = selectedDatabase === pool ? app : createApp(selectedDatabase);
   const server = serverApp.listen(port, () => {
     console.log(`Backend escuchando en el puerto ${server.address().port}`);
   });
   server.once('close', () => serverApp.locals.shutdown());
+  server.database = selectedDatabase;
+  server.ownsDatabase = ownsDatabase;
   return server;
 }
 
-export async function stopServer(server, database = pool) {
+export async function stopServer(server, database = server?.database || pool) {
   if (server?.listening) {
     await new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
     });
   }
-  if (typeof database.end === 'function') {
+  if (typeof database.end === 'function' && (database === pool || server?.ownsDatabase)) {
     await database.end();
   }
 }

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const migrationModulePath = fileURLToPath(import.meta.url);
 
-export async function runMigrations({ database, retries = 10 } = {}) {
+export async function runMigrations({ database, retries = 10, host } = {}) {
   const { default: pool, createPool, runMigrations: applyMigrations, waitForDatabase } = await import('./db.js');
   const isProduction = process.env.NODE_ENV === 'production';
   if (isProduction && (!process.env.MIGRATION_DB_USER || !process.env.MIGRATION_DB_PASSWORD)) {
@@ -12,10 +12,11 @@ export async function runMigrations({ database, retries = 10 } = {}) {
   }
 
   const ownsPool = !database;
-  const migrationDatabase = database || (process.env.MIGRATION_DB_USER
+  const migrationDatabase = database || (host || process.env.MIGRATION_DB_USER
     ? createPool({
-      user: process.env.MIGRATION_DB_USER,
-      password: process.env.MIGRATION_DB_PASSWORD
+      host,
+      user: process.env.MIGRATION_DB_USER || process.env.DB_USER,
+      password: process.env.MIGRATION_DB_PASSWORD || process.env.DB_PASSWORD
     })
     : pool);
 

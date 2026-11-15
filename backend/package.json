@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
+    "start:memory": "node --input-type=module -e \"process.env.USE_MEMORY_DB='true'; const { startServer, stopServer } = await import('./src/server.js'); const server = await startServer(); for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { stopServer(server).catch((error) => { console.error(error); process.exitCode = 1; }); });\"",
     "dev": "node --watch src/server.js",
     "test": "node --test tests/api.quality.test.js",
     "test:ci": "node tests/verify-ci.js",

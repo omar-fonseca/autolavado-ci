@@ -256,3 +256,224 @@ tbody tr:hover { background: #fbfcfa; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+:root {
+  --ink: #102a43;
+  --muted: #647b94;
+  --line: #d7e4f5;
+  --paper: #f2f6fc;
+  --white: #ffffff;
+  --green: #bfdbfe;
+  --green-dark: #1d4ed8;
+  --red: #c2413b;
+}
+
+/* Fondo */
+body {
+  color: var(--ink);
+  background-color: #f2f6fc;
+  background-image: radial-gradient(#d9e6f5 0.65px, transparent 0.65px);
+}
+
+/* Marca */
+.brand-mark {
+  background: #2563eb;
+  color: white;
+}
+
+.brand-mark span {
+  color: #bfdbfe;
+}
+
+.brand-name span {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+/* Encabezado con fotografía */
+.hero-banner {
+  min-height: 235px;
+  padding: 30px 34px;
+  align-items: center;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #082443;
+  background-image:
+    linear-gradient(90deg, #082443 0%, #082443e8 35%, #08244320 100%),
+    url("./assets/autolavado-ci-banner.png");
+  background-size: cover;
+  background-position: center;
+  margin-bottom: 30px;
+}
+
+.hero-banner .eyebrow,
+.hero-banner h1,
+.hero-banner .page-subtitle {
+  color: #ffffff;
+}
+
+.hero-banner .eyebrow {
+  opacity: .85;
+}
+
+.hero-banner .title-period {
+  color: #60a5fa;
+}
+
+.hero-banner .page-subtitle {
+  font-size: 15px;
+  opacity: .9;
+}
+
+/* Botones */
+.button-primary {
+  background: #1769e8;
+  color: white;
+  border-radius: 7px;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: #0f55c5;
+}
+
+.button-quiet:hover:not(:disabled) {
+  background: #e7f0fc;
+  color: #174ea6;
+}
+
+/* Indicadores */
+.metric-card {
+  border-radius: 10px;
+  box-shadow: 0 3px 12px #17365d0d;
+}
+
+.metric-ink {
+  background: #102a43;
+  border-color: #102a43;
+}
+
+.metric-lime {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+}
+
+.metric-lime .metric-top,
+.metric-lime .metric-foot {
+  color: #315b91;
+}
+
+.metric-white {
+  background: white;
+}
+
+/* Franja de operaciones */
+.operations-strip,
+.table-frame {
+  border-radius: 10px;
+  box-shadow: 0 3px 12px #17365d0a;
+}
+
+/* Tabla */
+thead {
+  background: #eaf2fc;
+}
+
+th {
+  color: #315b91;
+}
+
+td {
+  border-bottom-color: #e7eef8;
+}
+
+tbody tr:hover {
+  background: #f4f8fe;
+}
+
+/* Estados */
+.state-pill.is-done {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.state-pill.is-done::before {
+  background: #0284c7;
+}
+
+/* Verificación CI/CD */
+.verify-section {
+  background: #e6f0ff;
+  border-color: #c5dcfb;
+  border-radius: 10px;
+}
+
+.verify-symbol {
+  background: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.verify-copy .eyebrow {
+  color: #315b91;
+}
+
+.verify-copy > p:not(.eyebrow) {
+  color: #536d89;
+}
+
+.verify-expectation code {
+  color: #174ea6;
+}
+
+.button-verify {
+  background: #1769e8;
+  border-color: #1769e8;
+  color: white;
+  border-radius: 7px;
+}
+
+.button-verify:hover:not(:disabled) {
+  background: #0f55c5;
+}
+
+/* Formulario */
+.wash-dialog {
+  border-radius: 12px;
+}
+
+.field > span {
+  color: #2563eb;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: #3b82f6;
+  outline: 2px solid #bfdbfe;
+}
+
+.price-input-wrap {
+  border-color: #d7e4f5;
+}
+
+/* Accesibilidad */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline-color: #3b82f6;
+}
+
+/* Adaptación del banner a móviles */
+@media (max-width: 620px) {
+  .hero-banner {
+    min-height: 190px;
+    padding: 22px 18px;
+    background-position: 62% center;
+  }
+
+  .hero-banner h1 {
+    font-size: 30px;
+  }
+
+  .hero-banner .page-subtitle {
+    max-width: 220px;
+  }
+}

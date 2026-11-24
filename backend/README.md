@@ -39,3 +39,23 @@ No incluir `API_WRITE_KEY` en JavaScript del navegador ni en variables compilada
 ## Migraciones
 
 Los SQL versionados viven en `migrations/` y se registran en `schema_migrations`. Agregar una nueva migracion numerada; no editar migraciones que ya fueron aplicadas en un entorno compartido. Ejecutar las migraciones una sola vez por despliegue antes de iniciar nuevas replicas de la API.
+
+## Docker Compose y prueba CI
+
+Desde la raiz del repositorio, crear el archivo de entorno que Compose carga automaticamente y levantar los servicios:
+
+```powershell
+Copy-Item backend/.env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+La app aplica las migraciones al iniciar y espera a que MySQL este saludable. Para ejecutar la verificacion desde el contenedor (la URL interna predeterminada es `http://localhost:3000`):
+
+```powershell
+docker compose exec app npm run test:ci
+```
+
+Tambien se puede ejecutar contra una API local desde `backend/` con `npm install` seguido de `npm run test:ci`; `VERIFY_BASE_URL` permite elegir otra URL base. `docker compose down` conserva el volumen de datos. Usa `docker compose down --volumes` solo cuando quieras borrar la base local; Jenkins usa un nombre de proyecto exclusivo por ejecucion y elimina ese volumen efimero al terminar.
+
+Las contrasenas de `.env.example` son solo valores de desarrollo. Reemplazarlas y proteger el volumen en cualquier entorno persistente; no exponer este modo `development` publicamente.

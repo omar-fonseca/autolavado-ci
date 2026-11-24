@@ -1,0 +1,58 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      AUTO_MIGRATE: "true"
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-autolavado_db}
+      DB_USER: ${DB_USER:-autolavado_app}
+      DB_PASSWORD: ${DB_PASSWORD:-replace-with-app-password}
+      MIGRATION_DB_USER: ${MIGRATION_DB_USER:-autolavado_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:-replace-with-migration-password}
+      API_WRITE_KEY: ""
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 6
+    networks:
+      - autolavado-internal
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-replace-with-local-root-password}
+      MYSQL_DATABASE: ${DB_NAME:-autolavado_db}
+      APP_DB_USER: ${DB_USER:-autolavado_app}
+      APP_DB_PASSWORD: ${DB_PASSWORD:-replace-with-app-password}
+      MIGRATION_DB_USER: ${MIGRATION_DB_USER:-autolavado_migrator}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:-replace-with-migration-password}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql-init/01-create-users.sh:/docker-entrypoint-initdb.d/01-create-users.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+    networks:
+      - autolavado-internal
+
+networks:
+  autolavado-internal:
+    internal: true
+
+volumes:
+  mysql-data:

@@ -1,4 +1,5 @@
-const endpoint = `http://localhost:${process.env.PORT || 3000}/api/verify`;
+const baseUrl = (process.env.VERIFY_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
+const endpoint = `${baseUrl}/api/verify`;
 const expected = {
   estado: 'OPERACION_EXITOSA',
   placa: 'TEST-999',
@@ -15,8 +16,13 @@ try {
     headers,
     signal: AbortSignal.timeout(10000)
   });
-  const result = await response.json();
-  const passed = response.status === 200
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(`La API devolvio una respuesta no JSON (HTTP ${response.status}).`);
+  }
+  const passed = response.ok
     && result.estado === expected.estado
     && result.esperado?.placa === expected.placa
     && Number(result.esperado?.precio) === expected.precio
@@ -25,7 +31,7 @@ try {
 
   console.log('\nVerificacion E2E CI/CD - AutoLavado CI');
   console.table([
-    { campo: 'HTTP', esperado: '200', obtenido: String(response.status), resultado: response.status === 200 ? 'PASS' : 'FAIL' },
+    { campo: 'HTTP', esperado: 'exitoso', obtenido: String(response.status), resultado: response.ok ? 'PASS' : 'FAIL' },
     { campo: 'estado', esperado: expected.estado, obtenido: result.estado ?? 'ausente', resultado: result.estado === expected.estado ? 'PASS' : 'FAIL' },
     { campo: 'placa', esperado: expected.placa, obtenido: result.obtenido?.placa ?? 'ausente', resultado: result.obtenido?.placa === expected.placa ? 'PASS' : 'FAIL' },
     { campo: 'precio', esperado: String(expected.precio), obtenido: String(result.obtenido?.precio ?? 'ausente'), resultado: Number(result.obtenido?.precio) === expected.precio ? 'PASS' : 'FAIL' }

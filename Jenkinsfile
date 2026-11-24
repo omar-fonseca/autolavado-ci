@@ -50,6 +50,7 @@ exit /b 0
 
   post {
     always {
+      bat 'docker compose logs db'
       bat 'docker compose down --remove-orphans --volumes'
     }
   }

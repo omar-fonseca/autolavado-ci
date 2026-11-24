@@ -24,7 +24,10 @@ pipeline {
       steps {
         bat '''
 @echo off
-powershell -NoProfile -Command "$c = [System.IO.File]::ReadAllText('docker/mysql-init/01-create-users.sh') -replace \"`r`n\", \"`n\"; [System.IO.File]::WriteAllText('docker/mysql-init/01-create-users.sh', $c, [System.Text.UTF8Encoding]::new($false))"
+git config core.autocrlf false
+if errorlevel 1 exit /b 1
+git checkout -- docker/mysql-init/01-create-users.sh
+if errorlevel 1 exit /b 1
 docker compose up -d --build
 if errorlevel 1 exit /b 1
 '''

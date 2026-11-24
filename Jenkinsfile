@@ -20,13 +20,11 @@ pipeline {
       }
     }
 
-    stage('Build and start Compose') {
+stage('Build and start Compose') {
       steps {
         bat '''
 @echo off
-git config core.autocrlf false
-if errorlevel 1 exit /b 1
-git checkout -- docker/mysql-init/01-create-users.sh
+"C:\\Program Files\\Git\\bin\\bash.exe" -c "sed -i 's/\\r$//' docker/mysql-init/01-create-users.sh && chmod +x docker/mysql-init/01-create-users.sh"
 if errorlevel 1 exit /b 1
 docker compose up -d --build
 if errorlevel 1 exit /b 1
